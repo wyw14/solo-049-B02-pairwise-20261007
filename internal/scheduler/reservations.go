@@ -34,7 +34,7 @@ func (p *ReservationPlanner) Refresh(passID string) (Interval, error) {
 		return Interval{}, fmt.Errorf("pass window %s not found", passID)
 	}
 	for _, interval := range p.timeline.List("") {
-		if interval.PassID == passID && interval.Status != Released {
+		if interval.PassID == passID && interval.Occupies() {
 			if _, err := p.timeline.Release(interval.ReservationID); err != nil {
 				return Interval{}, err
 			}

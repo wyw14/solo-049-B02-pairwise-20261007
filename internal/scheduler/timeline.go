@@ -72,7 +72,7 @@ func (t *Timeline) Extend(reservationID string, newEnd time.Time) (Interval, err
 	if !found {
 		return Interval{}, fmt.Errorf("reservation %s not found", reservationID)
 	}
-	if current.Status == Released {
+	if current.Status.Terminal() {
 		return Interval{}, fmt.Errorf("reservation %s is already released", reservationID)
 	}
 	updated := current
@@ -107,6 +107,9 @@ func (t *Timeline) setStatus(reservationID string, status ReservationStatus) (In
 	if !found {
 		return Interval{}, fmt.Errorf("reservation %s not found", reservationID)
 	}
+	if !current.Status.CanTransitionTo(status) {
+		return Interval{}, fmt.Errorf("reservation %s cannot transition from %s to %s", reservationID, current.Status, status)
+	}
 	updated := current
 	updated.Status = status
 	t.byAntenna[antennaID][index] = updated
@@ -137,7 +140,7 @@ func (t *Timeline) CurrentOwner(antennaID string, at time.Time) (Interval, bool)
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 	for _, value := range t.byAntenna[antennaID] {
-		if value.Status != Released && !at.Before(value.Start) && at.Before(value.End) {
+		if value.Occupies() && !at.Before(value.Start) && at.Before(value.End) {
 			return value, true
 		}
 	}
@@ -146,7 +149,7 @@ func (t *Timeline) CurrentOwner(antennaID string, at time.Time) (Interval, bool)
 
 func (t *Timeline) conflictLocked(candidate Interval, excluded string) error {
 	for _, existing := range t.byAntenna[candidate.AntennaID] {
-		if existing.ReservationID == excluded || existing.Status == Released {
+		if existing.ReservationID == excluded || !existing.Occupies() {
 			continue
 		}
 		if candidate.Overlaps(existing) {
